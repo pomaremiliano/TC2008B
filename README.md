@@ -4,5 +4,5 @@
 
 
 * ## [Multi Agentes](/MultiAgentes/notasMultiAgentes/)
-* ## [Gráficas](/Gráficas/laboratorios)
+
 
