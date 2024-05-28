@@ -1,0 +1,154 @@
+# %% [markdown]
+# # Actividad 1 
+# ## Jorge Emiliano Pomar A01709338
+
+# %% [markdown]
+# ### Un dado con 20x20 espacios habilitados
+# ### Número de agentes: (1,5,10)
+# ### Celdas sucias 80% al iniciar
+
+# %%
+from mesa import Agent, Model
+from mesa.time import RandomActivation
+from mesa.space import MultiGrid
+from mesa.datacollection import DataCollector
+import matplotlib.pyplot as plt
+import numpy as np
+import random
+
+%matplotlib inline
+import matplotlib
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+plt.rcParams["animation.html"] = "jshtml"
+matplotlib.rcParams['animation.embed_limit'] = 2**128
+
+# %%
+class Aspiradoras(Agent):
+    def __init__(self, unique_id, model):
+        super().__init__(unique_id, model)
+        self.limpiado = 0
+    
+    def step(self):
+        if isinstance(self.model.grid.get_cell_list_contents([self.pos])[0], Suciedad):
+            self.clean()
+        else:
+            self.move()
+    
+    def move(self):
+        movimientos_posibles = self.model.grid.get_neighborhood(
+            self.pos,
+            moore=True,
+            include_center=False
+        )
+        new_position = self.random.choice(movimientos_posibles)
+        self.model.grid.move_agent(self, new_position)
+    
+    def clean(self):
+        suciedad = self.model.grid.get_cell_list_contents([self.pos])[0]
+        if isinstance(suciedad, Suciedad):
+            self.model.grid.remove_agent(suciedad)
+            self.limpiado += 1 
+
+class Suciedad(Agent):
+    pass
+
+# %%
+class OficinaModel(Model):
+    def __init__(self, N, num_agents, porc_celdas_sucias, max_tiempo):
+        self.num_agents = num_agents
+        self.grid = MultiGrid(N, N, True)
+        self.schedule = RandomActivation(self)
+        self.max_tiempo = max_tiempo
+        self.tiempo = 0
+    
+        self.create_agents()
+        self.crear_suciedad(N, porc_celdas_sucias)
+        
+        self.datacollector = DataCollector(
+            model_reporters={"Celdas limpiadas": lambda model: self.total_celdas_limpiadas()},
+        )
+    
+    # Funcion para crear las aspiradoras
+    def create_agents(self):
+        for i in range(self.num_agents):
+            a = Aspiradoras(i, self)
+            x = self.random.randrange(self.grid.width)
+            y = self.random.randrange(self.grid.height)
+            self.grid.place_agent(a, (x, y))
+            self.schedule.add(a)
+    
+    def crear_suciedad(self, N, porc_celdas_sucias):
+        num_celdas_sucias = int(N * N * porc_celdas_sucias)
+        todas_celdas = [(x, y) for x in range(N) for y in range(N)]
+        celdas_sucias = self.random.sample(todas_celdas, num_celdas_sucias)
+        for (x, y) in celdas_sucias:
+            suciedad = Suciedad("sucio", self)
+            self.grid.place_agent(suciedad, (x, y))
+    
+    
+    def step(self):
+        self.datacollector.collect(self)
+        self.schedule.step()
+        self.tiempo += 1
+        if self.tiempo >= self.max_tiempo:
+            self.running = False
+    
+    def total_celdas_limpiadas(self):
+        return sum([agent.limpiado for agent in self.schedule.agents if isinstance(agent, Aspiradoras)])
+
+    def obtener_limpias(self):
+        return self.datacollector.get_agent_vars_dataframe()
+
+# %%
+def grafica_modelo(model):
+    agentes_x = []
+    agentes_y = []
+    sucio_x = []
+    sucio_y = []
+    
+    for (contents, x, y) in model.grid.coord_iter():
+        for content in contents:
+            if isinstance(content, Aspiradoras):
+                agentes_x.append(x)
+                agentes_y.append(y)
+            elif isinstance(content, Suciedad):
+                sucio_x.append(x)
+                sucio_y.append(y)
+            
+    fig, ax = plt.subplots()
+    ax.set_title("Aspiradoras")
+    ax.set_aspect('equal')
+    ax.scatter(agentes_x, agentes_y, color='blue', label='Aspiradoras')
+    ax.scatter(sucio_x, sucio_y, color='red', label='Suciedad')
+    ax.legend()
+    plt.show()
+
+# %%
+fig, ax = plt.subplots()
+ax.set_title("Aspiradoras")
+ax.set_aspect('equal')
+
+
+def animate(i):
+    ax.clear()
+    model.step()
+    agentes_x = []
+    agentes_y = []
+    sucio_x = []
+    sucio_y = []
+    
+    for (contents, x, y) in model.grid.coord_iter():
+        for content in contents:
+            if isinstance(content, Aspiradoras):
+                agentes_x.append(x)
+                agentes_y.append(y)
+            elif isinstance(content, Suciedad):
+                sucio_x.append(x)
+                sucio_y.append(y)
+            
+    ax.scatter(agentes_x, agentes_y, color='blue')
+    ax.scatter(sucio_x, sucio_y, color='red')
+    
+animation.FuncAnimation(fig, animate, frames=10, interval=200, repeat=False)
+plt.show()
